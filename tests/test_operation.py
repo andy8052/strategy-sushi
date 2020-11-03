@@ -27,7 +27,7 @@ def test_vault_withdraw(vault, token, whale):
     assert token.balanceOf(whale) == balance
 
 
-def test_strategy_harvest(strategy, vault, token, whale, chain, jar, pickle_strategy):
+def test_strategy_harvest(strategy, vault, token, whale, chain, chef):
     print('vault:', vault.name())
     user_before = token.balanceOf(whale) + vault.balanceOf(whale)
     token.approve(vault, token.balanceOf(whale), {"from": whale})
@@ -35,18 +35,25 @@ def test_strategy_harvest(strategy, vault, token, whale, chain, jar, pickle_stra
     sleep(chain)
     print("share price before:", vault.pricePerShare().to("ether"))
     assert vault.creditAvailable(strategy) > 0
-    # harvest pickle so its unrealized profits don't mess with the calculation
-    pickle_strategy.harvest({"from": whale})
     # give the strategy some debt
     strategy.harvest()
     before = strategy.estimatedTotalAssets()
+    print("Est total assets:", before)
+    print("Sushi Chef balance:", chef.userInfo(strategy.pid(), strategy))
     # run strategy for some time
     sleep(chain)
-    jar_ratio_before = jar.getRatio().to("ether")
-    pickle_strategy.harvest({"from": whale})
-    jar_ratio_after = jar.getRatio().to("ether")
-    assert jar_ratio_after > jar_ratio_before
+    print("Sushi Chef pending:", chef.pendingSushi(strategy.pid(), strategy))
+    print("Want balance|strategy:", token.balanceOf(strategy))
+    print("Want balance|vault:", token.balanceOf(vault))
+    print("debt outstanding:", vault.debtOutstanding())
     strategy.harvest()
+    sleep(chain)
+    strategy.harvest()
+    print("Sushi Chef balance:", chef.userInfo(strategy.pid(), strategy))
+    print("Sushi Chef pending:", chef.pendingSushi(strategy.pid(), strategy))
+    print("Want balance|strategy:", token.balanceOf(strategy))
+    print("Want balance|vault:", token.balanceOf(vault))
+    print("debt outstanding:", vault.debtOutstanding())
     after = strategy.estimatedTotalAssets()
     assert after > before
     print("share price after: ", vault.pricePerShare().to("ether"))
@@ -56,7 +63,7 @@ def test_strategy_harvest(strategy, vault, token, whale, chain, jar, pickle_stra
     assert token.balanceOf(whale) >= user_before
 
 
-def test_strategy_withdraw(strategy, vault, token, whale, gov, chain, pickle_strategy):
+def test_strategy_withdraw(strategy, vault, token, whale, gov, chain):
     user_before = token.balanceOf(whale) + vault.balanceOf(whale)
     token.approve(vault, token.balanceOf(whale), {"from": whale})
     vault.deposit(token.balanceOf(whale), {"from": whale})
@@ -66,7 +73,8 @@ def test_strategy_withdraw(strategy, vault, token, whale, gov, chain, pickle_str
     initial_deposits = strategy.estimatedTotalAssets().to("ether")
     # second harvest secures some profits
     sleep(chain)
-    pickle_strategy.harvest({"from": gov})
+    strategy.harvest()
+    sleep(chain)
     strategy.harvest()
     deposits_after_savings = strategy.estimatedTotalAssets().to("ether")
     assert deposits_after_savings > initial_deposits

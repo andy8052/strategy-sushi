@@ -36,9 +36,9 @@ def vault(config, Vault, gov, rewards, guardian, token, whale):
 
 
 @pytest.fixture
-def strategy(config, StrategyUniswapPairPickle, vault, strategist, token, keeper, gov):
-    strategy = StrategyUniswapPairPickle.deploy(
-        vault, config["jar"], config["pid"], {"from": strategist}
+def strategy(config, StrategySushiswapPair, vault, strategist, token, keeper, gov):
+    strategy = StrategySushiswapPair.deploy(
+        vault, config["pid"], {"from": strategist}
     )
     strategy.setKeeper(keeper, {"from": strategist})
     vault.addStrategy(
@@ -52,27 +52,27 @@ def strategy(config, StrategyUniswapPairPickle, vault, strategist, token, keeper
 
 
 @pytest.fixture
-def succ_strategy(config, StrategyUniswapPairPickle, vault, strategist, keeper):
-    strategy = StrategyUniswapPairPickle.deploy(
-        vault, config["jar"], config["pid"], {"from": strategist}
+def succ_strategy(config, StrategySushiswapPair, vault, strategist, keeper):
+    strategy = StrategySushiswapPair.deploy(
+        vault, config["pid"], {"from": strategist}
     )
     strategy.setKeeper(keeper, {"from": strategist})
     return strategy
 
 
 @pytest.fixture
-def token(config, whale, uniswap, interface, weth, chain):
-    weth.approve(uniswap, 2 ** 256 - 1, {"from": whale})
-    pair = interface.UniswapPair(config["want"])
+def token(config, whale, sushiswap, interface, weth, chain):
+    weth.approve(sushiswap, 2 ** 256 - 1, {"from": whale})
+    pair = interface.SushiswapPair(config["want"])
     tokens = [interface.ERC20(token) for token in [pair.token0(), pair.token1()]]
     amount_in = "5000 ether"
     # obtain 10000 eth worth of liquidity
     for token in tokens:
-        if token.allowance(whale, uniswap) == 0:
-            token.approve(uniswap, 2 ** 256 - 1, {"from": whale})
+        if token.allowance(whale, sushiswap) == 0:
+            token.approve(sushiswap, 2 ** 256 - 1, {"from": whale})
 
         if token != weth:
-            uniswap.swapExactTokensForTokens(
+            sushiswap.swapExactTokensForTokens(
                 amount_in,
                 0,
                 [weth, token],
@@ -80,8 +80,9 @@ def token(config, whale, uniswap, interface, weth, chain):
                 chain[-1].timestamp + 1200,
                 {"from": whale},
             )
+
     # obtain want token by adding liquidity
-    uniswap.addLiquidity(
+    sushiswap.addLiquidity(
         tokens[0],
         tokens[1],
         tokens[0].balanceOf(whale) if tokens[0] != weth else amount_in,
@@ -93,18 +94,6 @@ def token(config, whale, uniswap, interface, weth, chain):
         {"from": whale},
     )
     return pair
-
-
-@pytest.fixture
-def jar(config, interface):
-    return interface.PickleJar(config["jar"])
-
-
-@pytest.fixture
-def pickle_strategy(token, interface, jar):
-    pickle_controller = interface.PickleController(jar.controller())
-    return interface.PickleStrategy(pickle_controller.strategies(token))
-
 
 @pytest.fixture
 def gov(accounts):
@@ -143,5 +132,9 @@ def weth(interface):
 
 
 @pytest.fixture
-def uniswap(interface, weth, whale):
-    return interface.UniswapRouter("0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D")
+def sushiswap(interface, weth, whale):
+    return interface.SushiswapRouter("0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F")
+
+@pytest.fixture
+def chef(interface):
+    return interface.SushiChef("0xc2EdaD668740f1aA35E4D8f227fB8E17dcA888Cd")
