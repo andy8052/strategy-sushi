@@ -6,21 +6,93 @@
     "vaults": [
         {
             "name": "Sushiswap v2 USDT-WETH Pool yVault",
-            "symbol": "yvUni-USDT-WETH",
+            "symbol": "yvSushi-USDT-WETH",
             "want": "0x06da0fd433C1A5d7a4faa01111c044910A184553",
             "pid": 0
         },
         {
             "name": "Sushiswap v2 USDC-WETH Pool yVault",
-            "symbol": "yvUni-USDC-WETH",
+            "symbol": "yvSushi-USDC-WETH",
             "want": "0x397FF1542f962076d0BFE58eA045FfA2d347ACa0",
             "pid": 1
         },
         {
             "name": "Sushiswap v2 DAI-WETH Pool yVault",
-            "symbol": "yvUni-DAI-WETH",
+            "symbol": "yvSushi-DAI-WETH",
             "want": "0xC3D03e4F041Fd4cD388c549Ee2A29a9E5075882f",
             "pid": 2
+        },
+        {
+            "name": "Sushiswap v2 sUSD-WETH Pool yVault",
+            "symbol": "yvSushi-sUSD-WETH",
+            "want": "0xF1F85b2C54a2bD284B1cf4141D64fD171Bd85539",
+            "pid": 3
+        },
+        {
+            "name": "Sushiswap v2 COMP-WETH Pool yVault",
+            "symbol": "yvSushi-COMP-WETH",
+            "want": "0x31503dcb60119A812feE820bb7042752019F2355",
+            "pid": 4
+        },
+        {
+            "name": "Sushiswap v2 SNX-WETH Pool yVault",
+            "symbol": "yvSushi-SNX-WETH",
+            "want": "0xA1d7b2d891e3A1f9ef4bBC5be20630C2FEB1c470",
+            "pid": 6
+        },
+        {
+            "name": "Sushiswap v2 UMA-WETH Pool yVault",
+            "symbol": "yvSushi-UMA-WETH",
+            "want": "0x001b6450083E531A5a7Bf310BD2c1Af4247E23D4",
+            "pid": 7
+        },
+        {
+            "name": "Sushiswap v2 LINK-WETH Pool yVault",
+            "symbol": "yvSushi-LINK-WETH",
+            "want": "0xC40D16476380e4037e6b1A2594cAF6a6cc8Da967",
+            "pid": 8
+        },
+        {
+            "name": "Sushiswap v2 BAND-WETH Pool yVault",
+            "symbol": "yvSushi-BAND-WETH",
+            "want": "0xA75F7c2F025f470355515482BdE9EFA8153536A8",
+            "pid": 9
+        },
+        {
+            "name": "Sushiswap v2 AMPL-WETH Pool yVault",
+            "symbol": "yvSushi-AMPL-WETH",
+            "want": "0xCb2286d9471cc185281c4f763d34A962ED212962",
+            "pid": 10
+        },
+        {
+            "name": "Sushiswap v2 YFI-WETH Pool yVault",
+            "symbol": "yvSushi-YFI-WETH",
+            "want": "0x088ee5007C98a9677165D78dD2109AE4a3D04d0C",
+            "pid": 11
+        },
+        {
+            "name": "Sushiswap v2 REN-WETH Pool yVault",
+            "symbol": "yvSushi-REN-WETH",
+            "want": "0x611CDe65deA90918c0078ac0400A72B0D25B9bb1",
+            "pid": 13
+        },
+        {
+            "name": "Sushiswap v2 SRM-WETH Pool yVault",
+            "symbol": "yvSushi-SRM-WETH",
+            "want": "0x117d4288B3635021a3D612FE05a3Cbf5C717fEf2",
+            "pid": 15
+        },
+        {
+            "name": "Sushiswap v2 CRV-WETH Pool yVault",
+            "symbol": "yvSushi-CRV-WETH",
+            "want": "0x58Dc5a51fE44589BEb22E8CE67720B5BC5378009",
+            "pid": 17
+        },
+        {
+            "name": "Sushiswap v2 UNI-WETH Pool yVault",
+            "symbol": "yvSushi-UNI-WETH",
+            "want": "0xDafd66636E2561b0284EDdE37e42d192F2844D40",
+            "pid": 18
         }
     ]
 }

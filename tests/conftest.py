@@ -65,8 +65,8 @@ def token(config, whale, sushiswap, interface, weth, chain):
     weth.approve(sushiswap, 2 ** 256 - 1, {"from": whale})
     pair = interface.SushiswapPair(config["want"])
     tokens = [interface.ERC20(token) for token in [pair.token0(), pair.token1()]]
-    amount_in = "5000 ether"
-    # obtain 10000 eth worth of liquidity
+    amount_in = "500 ether"
+    # obtain 1000 eth worth of liquidity
     for token in tokens:
         if token.allowance(whale, sushiswap) == 0:
             token.approve(sushiswap, 2 ** 256 - 1, {"from": whale})
