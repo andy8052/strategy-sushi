@@ -6,6 +6,8 @@ def test_shutdown(vault, token, strategy, chain):
     assert token.balanceOf(vault) == 0
     assert strategy.estimatedTotalAssets() > before * 0.999
     strategy.setEmergencyExit()
+    chain.mine(200)
+    strategy.harvest()
     assert strategy.estimatedTotalAssets() == 0
     after = token.balanceOf(vault)
     assert after > before * 0.999
