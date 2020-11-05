@@ -115,7 +115,6 @@ contract StrategySushiswapPair is BaseStrategy {
      *       total debt of the strategy and higher than it's expected value to be "safe".
      */
     function estimatedTotalAssets() public override view returns (uint256) {
-        // TODO: Build a more accurate estimate using the value of all positions in terms of `want`
         (uint256 _staked, ) = SushiChef(chef).userInfo(pid, address(this));
         uint256 _unrealized_profit = expectedReturn();
         return want.balanceOf(address(this)).add(_staked).add(_unrealized_profit);
@@ -140,7 +139,7 @@ contract StrategySushiswapPair is BaseStrategy {
         _amount = IERC20(reward).balanceOf(address(this));
         swap(reward, token1, _amount);
         add_liquidity();
-        _profit = want.balanceOf(address(this)).sub(getReserve()).sub(_debtOutstanding);
+        _profit = want.balanceOf(address(this)).sub(getReserve());
     }
 
     /*
@@ -179,27 +178,6 @@ contract StrategySushiswapPair is BaseStrategy {
         SushiChef(chef).withdraw(pid, _amount);
         _amountFreed = want.balanceOf(address(this)).sub(before);
     }
-
-    /*
-     * Provide a signal to the keeper that `harvest()` should be called. The keeper will provide
-     * the estimated gas cost that they would pay to call `harvest()`, and this function should
-     * use that estimate to make a determination if calling it is "worth it" for the keeper.
-     * This is not the only consideration into issuing this trigger, for example if the position
-     * would be negatively affected if `harvest()` is not called shortly, then this can return `true`
-     * even if the keeper might be "at a loss" (keepers are always reimbursed by yEarn)
-     *
-     * NOTE: this call and `tendTrigger` should never return `true` at the same time.
-     */
-    // function harvestTrigger(uint256 gasCost) public override view returns (bool) {
-    //     uint256 _credit = vault.creditAvailable().mul(wantPrice()).div(1e18);
-    //     uint256 _earned = SushiChef(chef).pendingSushi(pid, address(this));
-    //     uint256 _return = quote(reward, weth, _earned);
-    //     uint256 last_sync = vault.strategies(address(this)).lastSync;
-    //     bool time_trigger = block.number.sub(last_sync) >= interval;
-    //     bool cost_trigger = _return > gasCost.mul(gasFactor);
-    //     bool credit_trigger = _credit > gasCost.mul(gasFactor);
-    //     return time_trigger && (cost_trigger || credit_trigger);
-    // }
 
     function setGasFactor(uint256 _gasFactor) public {
         require(msg.sender == strategist || msg.sender == governance());
