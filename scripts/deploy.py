@@ -1,6 +1,6 @@
 import json
 
-from brownie import StrategyUniswapPairPickle, Vault, accounts, rpc, web3
+from brownie import StrategySushiswapPair, Vault, accounts, rpc, web3, Wei
 from click import secho
 from eth_utils import is_checksum_address
 
@@ -37,9 +37,14 @@ def main():
     else:
         vault = Vault.at(get_address('vault'))
 
-    strategy = StrategyUniswapPairPickle.deploy(
-        vault, config["jar"], config["pid"], {"from": deployer}
+    strategy = StrategySushiswapPair.deploy(
+        vault, config["pid"], {"from": deployer}
     )
+
+    # deposit_limit = Wei('100000 ether')
+    # vault.setDepositLimit(deposit_limit, {"from": deployer})
+    # vault.addStrategy(strategy, deposit_limit, deposit_limit, 50, {"from": deployer})
+
     secho(
         f"deployed {config['symbol']}\nvault: {vault}\nstrategy: {strategy}\n",
         fg="green",
@@ -50,8 +55,8 @@ def migrate():
     assert rpc.is_active()
     vault = Vault.at(get_address('vault'))
     gov = accounts.at(vault.governance(), force=True)
-    old_strategy = StrategyUniswapPairPickle.at(get_address('old strategy'))
-    new_strategy = StrategyUniswapPairPickle.deploy(vault, old_strategy.jar(), old_strategy.pid(), {'from': gov})
+    old_strategy = StrategySushiswapPair.at(get_address('old strategy'))
+    new_strategy = StrategySushiswapPair.deploy(vault, old_strategy.pid(), {'from': gov})
     print('pricePerShare', vault.pricePerShare().to('ether'))
     print('estimatedTotalAssets', old_strategy.estimatedTotalAssets().to('ether'))
     vault.migrateStrategy(old_strategy, new_strategy, {'from': gov})
