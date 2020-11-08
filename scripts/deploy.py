@@ -22,8 +22,8 @@ def main():
         print(f"[{i}] {config['name']}")
     config = configurations["vaults"][int(input("choose configuration to deploy: "))]
     deployer = accounts.load(input("deployer account: "))
-    
-    if input('deploy vault? y/n: ') == 'y':
+
+    if input("deploy vault? y/n: ") == "y":
         gov = get_address("gov")
         rewards = get_address("rewards")
         vault = Vault.deploy(
@@ -35,11 +35,9 @@ def main():
             {"from": deployer},
         )
     else:
-        vault = Vault.at(get_address('vault'))
+        vault = Vault.at(get_address("vault"))
 
-    strategy = StrategySushiswapPair.deploy(
-        vault, config["pid"], {"from": deployer}
-    )
+    strategy = StrategySushiswapPair.deploy(vault, config["pid"], {"from": deployer})
 
     # deposit_limit = Wei('100000 ether')
     # vault.setDepositLimit(deposit_limit, {"from": deployer})
@@ -53,17 +51,19 @@ def main():
 
 def migrate():
     assert rpc.is_active()
-    vault = Vault.at(get_address('vault'))
+    vault = Vault.at(get_address("vault"))
     gov = accounts.at(vault.governance(), force=True)
-    old_strategy = StrategySushiswapPair.at(get_address('old strategy'))
-    new_strategy = StrategySushiswapPair.deploy(vault, old_strategy.pid(), {'from': gov})
-    print('pricePerShare', vault.pricePerShare().to('ether'))
-    print('estimatedTotalAssets', old_strategy.estimatedTotalAssets().to('ether'))
-    vault.migrateStrategy(old_strategy, new_strategy, {'from': gov})
-    print('pricePerShare', vault.pricePerShare().to('ether'))
-    print('estimatedTotalAssets', new_strategy.estimatedTotalAssets().to('ether'))
+    old_strategy = StrategySushiswapPair.at(get_address("old strategy"))
+    new_strategy = StrategySushiswapPair.deploy(
+        vault, old_strategy.pid(), {"from": gov}
+    )
+    print("pricePerShare", vault.pricePerShare().to("ether"))
+    print("estimatedTotalAssets", old_strategy.estimatedTotalAssets().to("ether"))
+    vault.migrateStrategy(old_strategy, new_strategy, {"from": gov})
+    print("pricePerShare", vault.pricePerShare().to("ether"))
+    print("estimatedTotalAssets", new_strategy.estimatedTotalAssets().to("ether"))
     keeper = accounts.at(new_strategy.keeper(), force=True)
     for i in range(2):
-        new_strategy.harvest({'from': keeper})
-        print('pricePerShare', vault.pricePerShare().to('ether'))
-        print('estimatedTotalAssets', new_strategy.estimatedTotalAssets().to('ether'))
+        new_strategy.harvest({"from": keeper})
+        print("pricePerShare", vault.pricePerShare().to("ether"))
+        print("estimatedTotalAssets", new_strategy.estimatedTotalAssets().to("ether"))
