@@ -39,9 +39,9 @@ def main():
 
     strategy = StrategySushiswapPair.deploy(vault, config["pid"], {"from": deployer})
 
-    # deposit_limit = Wei('100000 ether')
-    # vault.setDepositLimit(deposit_limit, {"from": deployer})
-    # vault.addStrategy(strategy, deposit_limit, deposit_limit, 50, {"from": deployer})
+    deposit_limit = Wei('200 ether')
+    vault.setDepositLimit(deposit_limit, {"from": deployer})
+    vault.addStrategy(strategy, deposit_limit, deposit_limit, 50, {"from": deployer})
 
     secho(
         f"deployed {config['symbol']}\nvault: {vault}\nstrategy: {strategy}\n",
