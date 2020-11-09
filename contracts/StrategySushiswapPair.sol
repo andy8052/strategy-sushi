@@ -33,7 +33,7 @@ interface Sushiswap {
         address to,
         uint256 deadline
     ) external returns (uint256[] memory amounts);
-    
+
     function addLiquidity(
         address tokenA,
         address tokenB,
@@ -130,7 +130,11 @@ contract StrategySushiswapPair is BaseStrategy {
      * strategy and reduce it's overall position if lower than expected returns
      * are sustained for long periods of time.
      */
-    function prepareReturn(uint256 _debtOutstanding) internal override returns (uint256 _profit){
+    function prepareReturn(uint256 _debtOutstanding) internal override returns (uint256 _profit) {
+        if (_debtOutstanding > 0) {
+            liquidatePosition(_debtOutstanding);
+        }
+
         setReserve(want.balanceOf(address(this)).sub(_debtOutstanding));
         SushiChef(chef).deposit(pid, 0);
         uint _amount = IERC20(reward).balanceOf(address(this));
@@ -190,7 +194,7 @@ contract StrategySushiswapPair is BaseStrategy {
     }
 
     /*
-     * Do anything necesseary to prepare this strategy for migration, such
+     * Do anything necessary to prepare this strategy for migration, such
      * as transfering any reserve or LP tokens, CDPs, or other tokens or stores of value.
      */
     function prepareMigration(address _newStrategy) internal override {

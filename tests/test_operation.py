@@ -28,7 +28,7 @@ def test_vault_withdraw(vault, token, whale):
 
 
 def test_strategy_harvest(strategy, vault, token, whale, chain, chef):
-    print('vault:', vault.name())
+    print("vault:", vault.name())
     user_before = token.balanceOf(whale) + vault.balanceOf(whale)
     token.approve(vault, token.balanceOf(whale), {"from": whale})
     vault.deposit(token.balanceOf(whale), {"from": whale})
