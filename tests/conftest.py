@@ -37,9 +37,7 @@ def vault(config, Vault, gov, rewards, guardian, token, whale):
 
 @pytest.fixture
 def strategy(config, StrategySushiswapPair, vault, strategist, token, keeper, gov):
-    strategy = StrategySushiswapPair.deploy(
-        vault, config["pid"], {"from": strategist}
-    )
+    strategy = StrategySushiswapPair.deploy(vault, config["pid"], {"from": strategist})
     strategy.setKeeper(keeper, {"from": strategist})
     vault.addStrategy(
         strategy,
@@ -53,9 +51,7 @@ def strategy(config, StrategySushiswapPair, vault, strategist, token, keeper, go
 
 @pytest.fixture
 def succ_strategy(config, StrategySushiswapPair, vault, strategist, keeper):
-    strategy = StrategySushiswapPair.deploy(
-        vault, config["pid"], {"from": strategist}
-    )
+    strategy = StrategySushiswapPair.deploy(vault, config["pid"], {"from": strategist})
     strategy.setKeeper(keeper, {"from": strategist})
     return strategy
 
@@ -94,6 +90,7 @@ def token(config, whale, sushiswap, interface, weth, chain):
         {"from": whale},
     )
     return pair
+
 
 @pytest.fixture
 def gov(accounts):
@@ -134,6 +131,7 @@ def weth(interface):
 @pytest.fixture
 def sushiswap(interface, weth, whale):
     return interface.SushiswapRouter("0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F")
+
 
 @pytest.fixture
 def chef(interface):

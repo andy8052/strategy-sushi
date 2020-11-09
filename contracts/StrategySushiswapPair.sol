@@ -33,7 +33,7 @@ interface Sushiswap {
         address to,
         uint256 deadline
     ) external returns (uint256[] memory amounts);
-    
+
     function addLiquidity(
         address tokenA,
         address tokenB,
@@ -84,7 +84,7 @@ contract StrategySushiswapPair is BaseStrategy {
      * Provide an accurate expected value for the return this strategy
      * would provide to the Vault if `report()` was called right now
      */
-    function expectedReturn() public override view returns (uint256 _liquidity) {
+    function expectedReturn() internal view returns (uint256 _liquidity) {
         uint256 _earned = SushiChef(chef).pendingSushi(pid, address(this));
         if (_earned / 2 == 0) return 0;
         uint256 _amount0 = quote(reward, token0, _earned / 2);
@@ -115,7 +115,6 @@ contract StrategySushiswapPair is BaseStrategy {
      *       total debt of the strategy and higher than it's expected value to be "safe".
      */
     function estimatedTotalAssets() public override view returns (uint256) {
-        // TODO: Build a more accurate estimate using the value of all positions in terms of `want`
         (uint256 _staked, ) = SushiChef(chef).userInfo(pid, address(this));
         uint256 _unrealized_profit = expectedReturn();
         return want.balanceOf(address(this)).add(_staked).add(_unrealized_profit);
@@ -131,15 +130,20 @@ contract StrategySushiswapPair is BaseStrategy {
      * strategy and reduce it's overall position if lower than expected returns
      * are sustained for long periods of time.
      */
-    function prepareReturn() internal override {
-        reserve = want.balanceOf(address(this)).sub(outstanding);
+    function prepareReturn(uint256 _debtOutstanding) internal override returns (uint256 _profit) {
+        if (_debtOutstanding > 0) {
+            liquidatePosition(_debtOutstanding);
+        }
+
+        setReserve(want.balanceOf(address(this)).sub(_debtOutstanding));
         SushiChef(chef).deposit(pid, 0);
         uint _amount = IERC20(reward).balanceOf(address(this));
-        if (_amount < 1 gwei) return;
+        if (_amount < 1 gwei) return 0;
         swap(reward, token0, _amount / 2);
         _amount = IERC20(reward).balanceOf(address(this));
         swap(reward, token1, _amount);
         add_liquidity();
+        _profit = want.balanceOf(address(this)).sub(getReserve());
     }
 
     /*
@@ -149,9 +153,9 @@ contract StrategySushiswapPair is BaseStrategy {
      * was made is available for reinvestment. Also note that this number could
      * be 0, and you should handle that scenario accordingly.
      */
-    function adjustPosition() internal override {
-        reserve = 0;
-        uint _amount = want.balanceOf(address(this));
+    function adjustPosition(uint256 _debtOutstanding) internal override {
+        setReserve(0);
+        uint _amount = want.balanceOf(address(this)).sub(_debtOutstanding);
         if (_amount == 0) return;
         SushiChef(chef).deposit(pid, _amount);
     }
@@ -173,45 +177,10 @@ contract StrategySushiswapPair is BaseStrategy {
      * Liquidate as many assets as possible to `want`, irregardless of slippage,
      * up to `_amount`. Any excess should be re-invested here as well.
      */
-    function liquidatePosition(uint256 _amount) internal override {
-        // TODO: Do stuff here to free up `_amount` from all positions back into `want`
+    function liquidatePosition(uint256 _amount) internal override returns (uint256 _amountFreed) {
+        uint256 before = want.balanceOf(address(this));
         SushiChef(chef).withdraw(pid, _amount);
-    }
-
-    /*
-     * Provide a signal to the keeper that `tend()` should be called. The keeper will provide
-     * the estimated gas cost that they would pay to call `tend()`, and this function should
-     * use that estimate to make a determination if calling it is "worth it" for the keeper.
-     * This is not the only consideration into issuing this trigger, for example if the position
-     * would be negatively affected if `tend()` is not called shortly, then this can return `true`
-     * even if the keeper might be "at a loss" (keepers are always reimbursed by yEarn)
-     *
-     * NOTE: this call and `harvestTrigger` should never return `true` at the same time.
-     * NOTE: if `tend()` is never intended to be called, it should always return `false`
-     */
-    function tendTrigger(uint256 gasCost) public override view returns (bool) {
-        return false;
-    }
-
-    /*
-     * Provide a signal to the keeper that `harvest()` should be called. The keeper will provide
-     * the estimated gas cost that they would pay to call `harvest()`, and this function should
-     * use that estimate to make a determination if calling it is "worth it" for the keeper.
-     * This is not the only consideration into issuing this trigger, for example if the position
-     * would be negatively affected if `harvest()` is not called shortly, then this can return `true`
-     * even if the keeper might be "at a loss" (keepers are always reimbursed by yEarn)
-     *
-     * NOTE: this call and `tendTrigger` should never return `true` at the same time.
-     */
-    function harvestTrigger(uint256 gasCost) public override view returns (bool) {
-        uint256 _credit = vault.creditAvailable().mul(wantPrice()).div(1e18);
-        uint256 _earned = SushiChef(chef).pendingSushi(pid, address(this));
-        uint256 _return = quote(reward, weth, _earned);
-        uint256 last_sync = vault.strategies(address(this)).lastSync;
-        bool time_trigger = block.number.sub(last_sync) >= interval;
-        bool cost_trigger = _return > gasCost.mul(gasFactor);
-        bool credit_trigger = _credit > gasCost.mul(gasFactor);
-        return time_trigger && (cost_trigger || credit_trigger);
+        _amountFreed = want.balanceOf(address(this)).sub(before);
     }
 
     function setGasFactor(uint256 _gasFactor) public {
@@ -225,7 +194,7 @@ contract StrategySushiswapPair is BaseStrategy {
     }
 
     /*
-     * Do anything necesseary to prepare this strategy for migration, such
+     * Do anything necessary to prepare this strategy for migration, such
      * as transfering any reserve or LP tokens, CDPs, or other tokens or stores of value.
      */
     function prepareMigration(address _newStrategy) internal override {
