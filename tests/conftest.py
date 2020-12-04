@@ -1,7 +1,6 @@
 import json
 import pytest
 
-
 with open("configurations.json") as f:
     configurations = json.load(f)
 
@@ -42,7 +41,7 @@ def strategy(config, StrategySushiswapPair, vault, strategist, token, keeper, go
     vault.addStrategy(
         strategy,
         token.totalSupply() / 2,  # Debt limit of 50% total supply
-        token.totalSupply() // 1000,  # Rate limt of 0.1% of token supply per block
+        token.totalSupply() / 2,  # Rate limt of 0.1% of token supply per block
         50,  # 0.5% performance fee for Strategist
         {"from": gov},
     )
@@ -127,6 +126,9 @@ def whale(accounts):
 def weth(interface):
     return interface.ERC20("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2")
 
+@pytest.fixture
+def sushi(interface):
+    return interface.ERC20("0x6B3595068778DD592e39A122f4f5a5cF09C90fE2")
 
 @pytest.fixture
 def sushiswap(interface, weth, whale):
@@ -136,3 +138,16 @@ def sushiswap(interface, weth, whale):
 @pytest.fixture
 def chef(interface):
     return interface.SushiChef("0xc2EdaD668740f1aA35E4D8f227fB8E17dcA888Cd")
+
+@pytest.fixture
+def sushimaker(interface):
+    return interface.SushiMaker("0x6684977bBED67e101BB80Fc07fCcfba655c0a64F")
+
+@pytest.fixture
+def xsushi(interface):
+    return interface.xSushi("0x8798249c2E607446EfB7Ad49eC89dD1865Ff4272")
+
+@pytest.fixture
+def sushiwhale(accounts):
+    return accounts.at("0xf73B31c07e3f8Ea8f7c59Ac58ED1F878708c8A76", force=True)
+    
