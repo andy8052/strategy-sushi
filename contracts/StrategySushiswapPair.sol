@@ -48,21 +48,33 @@ interface Sushiswap {
     function getAmountsOut(uint amountIn, address[] memory path) external view returns (uint[] memory amounts);
 }
 
+interface xSushi {
+    function enter(uint256 _amount) external;
+    function leave(uint256 _share) external;
+}
+
 contract StrategySushiswapPair is BaseStrategy {
     using SafeERC20 for IERC20;
     using Address for address;
     using SafeMath for uint256;
 
     string public constant override name = "StrategySushiswapPair";
+
+    address public constant weth = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
     address public constant chef = 0xc2EdaD668740f1aA35E4D8f227fB8E17dcA888Cd;
+    address public constant xsushi = 0x8798249c2E607446EfB7Ad49eC89dD1865Ff4272;
     address public constant reward = 0x6B3595068778DD592e39A122f4f5a5cF09C90fE2;
     address public constant sushiswap = 0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F;
-    address public constant weth = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+
     uint256 public pid;
     address token0;
     address token1;
     uint256 gasFactor = 200;
     uint256 interval = 1000;
+
+    // The amount of sushi we have earned which we are now staking in xSUSHI
+    // We do not want to sell this SUSHI for LP tokens
+    uint256 public staking = 0;
 
     constructor(address _vault, uint256 _pid) public BaseStrategy(_vault) {
         pid = _pid;
@@ -73,6 +85,7 @@ contract StrategySushiswapPair is BaseStrategy {
         token0 = SushiswapPair(address(want)).token0();
         token1 = SushiswapPair(address(want)).token1();
         IERC20(want).safeApprove(chef, type(uint256).max);
+        IERC20(reward).safeApprove(xsushi, type(uint256).max);
         IERC20(reward).safeApprove(sushiswap, type(uint256).max);
         IERC20(token0).safeApprove(sushiswap, type(uint256).max);
         IERC20(token1).safeApprove(sushiswap, type(uint256).max);
@@ -80,22 +93,6 @@ contract StrategySushiswapPair is BaseStrategy {
 
     // ******** OVERRIDE THESE METHODS FROM BASE CONTRACT ************
 
-    /*
-     * Provide an accurate expected value for the return this strategy
-     * would provide to the Vault if `report()` was called right now
-     */
-    function expectedReturn() internal view returns (uint256 _liquidity) {
-        uint256 _earned = SushiChef(chef).pendingSushi(pid, address(this));
-        if (_earned / 2 == 0) return 0;
-        uint256 _amount0 = quote(reward, token0, _earned / 2);
-        uint256 _amount1 = quote(reward, token1, _earned / 2);
-        (uint112 _reserve0, uint112 _reserve1, ) = SushiswapPair(address(want)).getReserves();
-        uint256 _supply = IERC20(want).totalSupply();
-        return Math.min(
-            _amount0.mul(_supply).div(_reserve0),
-            _amount1.mul(_supply).div(_reserve1)
-        );
-    }
     /*
      * Provide an accurate estimate for the total amount of assets (principle + return)
      * that this strategy is currently managing, denominated in terms of `want` tokens.
@@ -116,8 +113,9 @@ contract StrategySushiswapPair is BaseStrategy {
      */
     function estimatedTotalAssets() public override view returns (uint256) {
         (uint256 _staked, ) = SushiChef(chef).userInfo(pid, address(this));
-        uint256 _unrealized_profit = expectedReturn();
-        return want.balanceOf(address(this)).add(_staked).add(_unrealized_profit);
+        uint256 _unrealized_profit = sushi_to_want(SushiChef(chef).pendingSushi(pid, address(this)));
+        uint256 _xsushi = sushi_to_want(get_share_worth());
+        return want.balanceOf(address(this)).add(_staked).add(_unrealized_profit).add(_xsushi);
     }
 
     /*
@@ -130,20 +128,31 @@ contract StrategySushiswapPair is BaseStrategy {
      * strategy and reduce it's overall position if lower than expected returns
      * are sustained for long periods of time.
      */
-    function prepareReturn(uint256 _debtOutstanding) internal override returns (uint256 _profit) {
+    function prepareReturn(uint256 _debtOutstanding) internal override returns (uint256 _profit, uint256 _loss, uint256 _debtPayment) {
         if (_debtOutstanding > 0) {
-            liquidatePosition(_debtOutstanding);
+            _debtPayment = liquidatePosition(_debtOutstanding);
         }
 
-        setReserve(want.balanceOf(address(this)).sub(_debtOutstanding));
-        SushiChef(chef).deposit(pid, 0);
-        uint _amount = IERC20(reward).balanceOf(address(this));
-        if (_amount < 1 gwei) return 0;
-        swap(reward, token0, _amount / 2);
-        _amount = IERC20(reward).balanceOf(address(this));
-        swap(reward, token1, _amount);
-        add_liquidity();
-        _profit = want.balanceOf(address(this)).sub(getReserve());
+        // Figure out how much want we have
+        uint256 _before = want.balanceOf(address(this));
+
+        // Withdraw all our xSushi
+        xSushi(xsushi).leave(IERC20(xsushi).balanceOf(address(this)));
+        // Get how much sushi we have earned from xSushi
+        uint256 _earned = 0;
+        if (IERC20(reward).balanceOf(address(this)) > staking) {
+            _earned = IERC20(reward).balanceOf(address(this)).sub(staking);
+        }
+
+        if (_earned > 0) {
+            swap(reward, token0, _earned / 2);
+            _earned = IERC20(reward).balanceOf(address(this));
+            swap(reward, token1, _earned);
+            add_liquidity();
+            
+            // How much want we got from xSushi
+            _profit = want.balanceOf(address(this)).sub(_before);
+        }
     }
 
     /*
@@ -154,10 +163,13 @@ contract StrategySushiswapPair is BaseStrategy {
      * be 0, and you should handle that scenario accordingly.
      */
     function adjustPosition(uint256 _debtOutstanding) internal override {
-        setReserve(0);
         uint _amount = want.balanceOf(address(this)).sub(_debtOutstanding);
-        if (_amount == 0) return;
         SushiChef(chef).deposit(pid, _amount);
+
+        _amount = IERC20(reward).balanceOf(address(this));
+        if (_amount == 0) return;
+        xSushi(xsushi).enter(_amount);
+        staking = _amount;
     }
 
     /*
@@ -167,10 +179,10 @@ contract StrategySushiswapPair is BaseStrategy {
      * while not suffering exorbitant losses. This function is used during emergency exit
      * instead of `prepareReturn()`
      */
-    function exitPosition() internal override {
-        // TODO: Do stuff here to free up as much as possible of all positions back into `want`
+    function exitPosition(uint256 _debtOutstanding) internal override returns (uint256 _profit, uint256 _loss, uint256 _debtPayment) {
         (uint256 _staked, ) = SushiChef(chef).userInfo(pid, address(this));
         SushiChef(chef).withdraw(pid, _staked);
+        _debtPayment = want.balanceOf(address(this));
     }
 
     /*
@@ -179,8 +191,8 @@ contract StrategySushiswapPair is BaseStrategy {
      */
     function liquidatePosition(uint256 _amount) internal override returns (uint256 _amountFreed) {
         uint256 before = want.balanceOf(address(this));
-        SushiChef(chef).withdraw(pid, _amount);
-        _amountFreed = want.balanceOf(address(this)).sub(before);
+        SushiChef(chef).withdraw(pid, _amount.sub(before));
+        _amountFreed = want.balanceOf(address(this));
     }
 
     function setGasFactor(uint256 _gasFactor) public {
@@ -198,9 +210,9 @@ contract StrategySushiswapPair is BaseStrategy {
      * as transfering any reserve or LP tokens, CDPs, or other tokens or stores of value.
      */
     function prepareMigration(address _newStrategy) internal override {
-        // TODO: Transfer any non-`want` tokens to the new strategy
-        exitPosition();
+        exitPosition(0);
         want.transfer(_newStrategy, want.balanceOf(address(this)));
+        IERC20(xsushi).transfer(_newStrategy, IERC20(xsushi).balanceOf(address(this)));
     }
 
     // NOTE: Override this if you typically manage tokens inside this contract
@@ -210,6 +222,7 @@ contract StrategySushiswapPair is BaseStrategy {
         address[] memory protected = new address[](2);
         protected[0] = address(want);
         protected[1] = reward;
+        protected[2] = xsushi;
         return protected;
     }
 
@@ -265,6 +278,26 @@ contract StrategySushiswapPair is BaseStrategy {
             0, 0,
             address(this),
             block.timestamp
+        );
+    }
+
+    // returns an 18 decimal amount of SUSHI that our xSUSHI is worth
+    function get_share_worth() internal view returns (uint256) {
+        uint256 sushi = IERC20(reward).balanceOf(xsushi);
+        uint256 total = IERC20(xsushi).totalSupply();
+        uint256 share = IERC20(xsushi).balanceOf(address(this));
+        return share.mul(sushi).div(total);
+    }
+
+    function sushi_to_want(uint256 _earned) internal view returns (uint256) {
+        if (_earned / 2 == 0) return 0;
+        uint256 _amount0 = quote(reward, token0, _earned / 2);
+        uint256 _amount1 = quote(reward, token1, _earned / 2);
+        (uint112 _reserve0, uint112 _reserve1, ) = SushiswapPair(address(want)).getReserves();
+        uint256 _supply = IERC20(want).totalSupply();
+        return Math.min(
+            _amount0.mul(_supply).div(_reserve0),
+            _amount1.mul(_supply).div(_reserve1)
         );
     }
 

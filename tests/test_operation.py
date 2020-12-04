@@ -27,7 +27,7 @@ def test_vault_withdraw(vault, token, whale):
     assert token.balanceOf(whale) == balance
 
 
-def test_strategy_harvest(strategy, vault, token, whale, chain, chef):
+def test_strategy_harvest(strategy, vault, token, whale, chain, chef, xsushi, sushiswap, sushimaker, sushiwhale, sushi):
     print("vault:", vault.name())
     user_before = token.balanceOf(whale) + vault.balanceOf(whale)
     token.approve(vault, token.balanceOf(whale), {"from": whale})
@@ -43,14 +43,37 @@ def test_strategy_harvest(strategy, vault, token, whale, chain, chef):
     # run strategy for some time
     sleep(chain)
     print("Sushi Chef pending:", chef.pendingSushi(strategy.pid(), strategy))
+    print("xSushi balance:", xsushi.balanceOf(strategy))
     print("Want balance|strategy:", token.balanceOf(strategy))
     print("Want balance|vault:", token.balanceOf(vault))
     print("debt outstanding:", vault.debtOutstanding())
+
+    # We need to simulate sushi trading to earn some fees. We skip this by sending sushi to the sushi bar
+    sushi.transfer(xsushi, 5000000000000000000000, {"from": sushiwhale})
     strategy.harvest()
+    print("Sushi Chef balance:", chef.userInfo(strategy.pid(), strategy))
     sleep(chain)
+    print("Sushi Chef pending:", chef.pendingSushi(strategy.pid(), strategy))
+    print("xSushi balance:", xsushi.balanceOf(strategy))
+    print("Want balance|strategy:", token.balanceOf(strategy))
+    print("Want balance|vault:", token.balanceOf(vault))
+    print("debt outstanding:", vault.debtOutstanding())
+
+    sushi.transfer(xsushi, 5000000000000000000000, {"from": sushiwhale})
+    strategy.harvest()
+    print("Sushi Chef balance:", chef.userInfo(strategy.pid(), strategy))
+    sleep(chain)
+    print("Sushi Chef pending:", chef.pendingSushi(strategy.pid(), strategy))
+    print("xSushi balance:", xsushi.balanceOf(strategy))
+    print("Want balance|strategy:", token.balanceOf(strategy))
+    print("Want balance|vault:", token.balanceOf(vault))
+    print("debt outstanding:", vault.debtOutstanding())
+
+    sushi.transfer(xsushi, 5000000000000000000000, {"from": sushiwhale})
     strategy.harvest()
     print("Sushi Chef balance:", chef.userInfo(strategy.pid(), strategy))
     print("Sushi Chef pending:", chef.pendingSushi(strategy.pid(), strategy))
+    print("xSushi balance:", xsushi.balanceOf(strategy))
     print("Want balance|strategy:", token.balanceOf(strategy))
     print("Want balance|vault:", token.balanceOf(vault))
     print("debt outstanding:", vault.debtOutstanding())
@@ -63,16 +86,18 @@ def test_strategy_harvest(strategy, vault, token, whale, chain, chef):
     assert token.balanceOf(whale) >= user_before
 
 
-def test_strategy_withdraw(strategy, vault, token, whale, gov, chain):
+def test_strategy_withdraw(strategy, vault, token, whale, gov, chain, sushiwhale, xsushi, sushi):
     user_before = token.balanceOf(whale) + vault.balanceOf(whale)
     token.approve(vault, token.balanceOf(whale), {"from": whale})
     vault.deposit(token.balanceOf(whale), {"from": whale})
     # first harvest adds initial deposits
     sleep(chain)
+    sushi.transfer(xsushi, 5000000000000000000000, {"from": sushiwhale})
     strategy.harvest()
     initial_deposits = strategy.estimatedTotalAssets().to("ether")
     # second harvest secures some profits
     sleep(chain)
+    sushi.transfer(xsushi, 5000000000000000000000, {"from": sushiwhale})
     strategy.harvest()
     sleep(chain)
     strategy.harvest()
