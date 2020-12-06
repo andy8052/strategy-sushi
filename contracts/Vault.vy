@@ -35,7 +35,7 @@
     https://github.com/iearn-finance/yearn-vaults/blob/master/SPECIFICATION.md
 """
 
-API_VERSION: constant(String[28]) = "0.2.1"
+API_VERSION: constant(String[28]) = "0.2.2"
 
 # TODO: Add ETH Configuration
 from vyper.interfaces import ERC20
@@ -143,6 +143,11 @@ managementFee: public(uint256)
 performanceFee: public(uint256)
 FEE_MAX: constant(uint256) = 10_000  # 100%, or 10k basis points
 SECS_PER_YEAR: constant(uint256) = 31_557_600  # 365.25 days
+# `nonces` track `permit` approvals with signature.
+nonces: public(HashMap[address, uint256])
+DOMAIN_SEPARATOR: public(bytes32)
+DOMAIN_TYPE_HASH: constant(bytes32) = keccak256('EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)')
+PERMIT_TYPE_HASH: constant(bytes32) = keccak256("Permit(address owner,address spender,uint256 amount,uint256 nonce,uint256 expiry)")
 
 
 @external
@@ -190,6 +195,16 @@ def __init__(
     self.depositLimit = MAX_UINT256  # Start unlimited
     self.lastReport = block.timestamp
     self.activation = block.timestamp
+    # EIP-712
+    self.DOMAIN_SEPARATOR = keccak256(
+        concat(
+            DOMAIN_TYPE_HASH,
+            keccak256(convert("Yearn Vault", Bytes[11])),
+            keccak256(convert(API_VERSION, Bytes[28])),
+            convert(chain.id, bytes32),
+            convert(self, bytes32)
+        )
+    )
 
 
 @pure
@@ -200,6 +215,9 @@ def apiVersion() -> String[28]:
         Used to track the deployed version of this contract. In practice you
         can use this version number to compare with Yearn's GitHub and
         determine which version of the source matches this deployed contract.
+    @dev
+        All strategies must have an `apiVersion()` that matches the Vault's
+        `API_VERSION`.
     @return API_VERSION which holds the current version of this contract.
     """
     return API_VERSION
@@ -517,6 +535,50 @@ def decreaseAllowance(_spender: address, _value: uint256) -> bool:
     return True
 
 
+@external
+def permit(owner: address, spender: address, amount: uint256, expiry: uint256, signature: Bytes[65]) -> bool:
+    """
+    @notice
+        Approves spender by owner's signature to expend owner's tokens.
+        See https://eips.ethereum.org/EIPS/eip-2612.
+
+    @param owner The address which is a source of funds and has signed the Permit.
+    @param spender The address which is allowed to spend the funds.
+    @param amount The amount of tokens to be spent.
+    @param expiry The timestamp after which the Permit is no longer valid.
+    @param signature A valid secp256k1 signature of Permit by owner encoded as r, s, v.
+    @return True, if transaction completes successfully
+    """
+    assert owner != ZERO_ADDRESS  # dev: invalid owner
+    assert expiry == 0 or expiry >= block.timestamp  # dev: permit expired
+    nonce: uint256 = self.nonces[owner]
+    digest: bytes32 = keccak256(
+        concat(
+            b'\x19\x01',
+            self.DOMAIN_SEPARATOR,
+            keccak256(
+                concat(
+                    PERMIT_TYPE_HASH,
+                    convert(owner, bytes32),
+                    convert(spender, bytes32),
+                    convert(amount, bytes32),
+                    convert(nonce, bytes32),
+                    convert(expiry, bytes32),
+                )
+            )
+        )
+    )
+    # NOTE: signature is packed as r, s, v
+    r: uint256 = convert(slice(signature, 0, 32), uint256)
+    s: uint256 = convert(slice(signature, 32, 32), uint256)
+    v: uint256 = convert(slice(signature, 64, 1), uint256)
+    assert ecrecover(digest, v, r, s) == owner  # dev: invalid signature
+    self.allowance[owner][spender] = amount
+    self.nonces[owner] = nonce + 1
+    log Approval(owner, spender, amount)
+    return True
+
+
 @view
 @internal
 def _totalAssets() -> uint256:
@@ -598,7 +660,7 @@ def _issueSharesForAmount(_to: address, _amount: uint256) -> uint256:
     # Issues `_amount` Vault shares to `_to`.
     # Shares must be issued prior to taking on new collateral, or
     # calculation will be wrong. This means that only *trusted* tokens
-    # (with no capability for exploitive behavior) can be used.
+    # (with no capability for exploitative behavior) can be used.
     shares: uint256 = 0
     # HACK: Saves 2 SLOADs (~4000 gas)
     totalSupply: uint256 = self.totalSupply
@@ -712,7 +774,11 @@ def maxAvailableShares() -> uint256:
         Determines the total quantity of shares this Vault can provide,
         factoring in assets currently residing in the Vault, as well as
         those deployed to strategies.
-    @dev Regarding how shares are calculated, see dev note on `deposit`.
+    @dev
+        Regarding how shares are calculated, see dev note on `deposit`.
+
+        If you want to calculated the maximum a user could withdraw up to,
+        you want to use this function.
     @return The total quantity of shares this Vault can provide.
     """
     shares: uint256 = self._sharesForAmount(self.token.balanceOf(self))
@@ -1246,6 +1312,12 @@ def report(_gain: uint256, _loss: uint256, _debtPayment: uint256) -> uint256:
     @notice
         Reports the amount of assets the calling Strategy has free (usually in
         terms of ROI).
+
+        The performance fee is determined here, off of the strategy's profits
+        (if any), and sent to governance.
+
+        The strategist's fee is also determined here (off of profits), to be
+        handled according to the strategist on the next harvest.
 
         This may only be called by a Strategy managed by this Vault.
     @dev

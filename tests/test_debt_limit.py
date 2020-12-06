@@ -54,6 +54,7 @@ def test_increasing_debt_limit(
 
     # Let's just increase it a bit, and make sure it works.
     vault.updateStrategyDebtLimit(strategy, amount * 2, {"from": gov})
+    vault.deposit(amount, {"from": whale})
     strategy.harvest({"from": gov})
     assert strategy.estimatedTotalAssets() >= amount * 2
 

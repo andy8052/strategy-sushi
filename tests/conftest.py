@@ -40,8 +40,8 @@ def strategy(config, StrategySushiswapPair, vault, strategist, token, keeper, go
     strategy.setKeeper(keeper, {"from": strategist})
     vault.addStrategy(
         strategy,
-        token.totalSupply() / 2,  # Debt limit of 50% total supply
-        token.totalSupply() / 2,  # Rate limt of 0.1% of token supply per block
+        token.totalSupply(),
+        token.totalSupply(),
         50,  # 0.5% performance fee for Strategist
         {"from": gov},
     )

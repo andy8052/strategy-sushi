@@ -212,7 +212,7 @@ contract StrategySushiswapPair is BaseStrategy {
     function prepareMigration(address _newStrategy) internal override {
         exitPosition(0);
         want.transfer(_newStrategy, want.balanceOf(address(this)));
-        IERC20(xsushi).transfer(_newStrategy, IERC20(xsushi).balanceOf(address(this)));
+        IERC20(xsushi).transfer(vault.governance(), IERC20(xsushi).balanceOf(address(this)));
     }
 
     // NOTE: Override this if you typically manage tokens inside this contract
