@@ -27,7 +27,7 @@ def test_vault_withdraw(vault, token, whale):
     assert token.balanceOf(whale) == balance
 
 
-def test_strategy_harvest(strategy, vault, token, whale, chain, chef, xsushi, sushiswap, sushimaker, sushiwhale, sushi):
+def test_strategy_harvest(strategy, vault, token, whale, chain, chef, xsushi, sushiswap, sushimaker, sushiwhale, sushi, weth):
     print("vault:", vault.name())
     user_before = token.balanceOf(whale) + vault.balanceOf(whale)
     token.approve(vault, token.balanceOf(whale), {"from": whale})
@@ -37,6 +37,7 @@ def test_strategy_harvest(strategy, vault, token, whale, chain, chef, xsushi, su
     assert vault.creditAvailable(strategy) > 0
     # give the strategy some debt
     strategy.harvest()
+    assert weth.balanceOf(strategy) < 1000000000000
     before = strategy.estimatedTotalAssets()
     print("Est total assets:", before)
     print("Sushi Chef balance:", chef.userInfo(strategy.pid(), strategy))
@@ -51,6 +52,8 @@ def test_strategy_harvest(strategy, vault, token, whale, chain, chef, xsushi, su
     # We need to simulate sushi trading to earn some fees. We skip this by sending sushi to the sushi bar
     sushi.transfer(xsushi, 5000000000000000000000, {"from": sushiwhale})
     strategy.harvest()
+    assert weth.balanceOf(strategy) < 1000000000000
+
     print("Sushi Chef balance:", chef.userInfo(strategy.pid(), strategy))
     sleep(chain)
     print("Sushi Chef pending:", chef.pendingSushi(strategy.pid(), strategy))
@@ -61,6 +64,8 @@ def test_strategy_harvest(strategy, vault, token, whale, chain, chef, xsushi, su
 
     sushi.transfer(xsushi, 5000000000000000000000, {"from": sushiwhale})
     strategy.harvest()
+    assert weth.balanceOf(strategy) < 1000000000000
+
     print("Sushi Chef balance:", chef.userInfo(strategy.pid(), strategy))
     sleep(chain)
     print("Sushi Chef pending:", chef.pendingSushi(strategy.pid(), strategy))
@@ -71,6 +76,8 @@ def test_strategy_harvest(strategy, vault, token, whale, chain, chef, xsushi, su
 
     sushi.transfer(xsushi, 5000000000000000000000, {"from": sushiwhale})
     strategy.harvest()
+    assert weth.balanceOf(strategy) < 1000000000000 
+
     print("Sushi Chef balance:", chef.userInfo(strategy.pid(), strategy))
     print("Sushi Chef pending:", chef.pendingSushi(strategy.pid(), strategy))
     print("xSushi balance:", xsushi.balanceOf(strategy))

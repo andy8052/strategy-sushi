@@ -146,8 +146,7 @@ contract StrategySushiswapPair is BaseStrategy {
 
         if (_earned > 0) {
             swap(reward, token0, _earned / 2);
-            _earned = IERC20(reward).balanceOf(address(this));
-            swap(reward, token1, _earned);
+            swap(reward, token1, _earned / 2);
             add_liquidity();
             
             // How much want we got from xSushi

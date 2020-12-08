@@ -23,7 +23,7 @@ def main():
 
     balance = strategy.estimatedTotalAssets().to("ether")
 
-    strategy.harvest({"from": deployer})
+    strategy.harvest({"from": deployer, "gas_price": Wei("50 gwei")})
 
     secho(
         f"Total Assets: {balance} SLP\nstrategy: {strategy}\n",
