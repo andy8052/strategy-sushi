@@ -118,6 +118,10 @@ contract StrategySushiswapPair is BaseStrategy {
         return want.balanceOf(address(this)).add(_staked).add(_unrealized_profit).add(_xsushi);
     }
 
+    function harvestTrigger(uint256 callCost) public view override returns (bool) {
+        return super.harvestTrigger(eth_to_want(callCost));
+    }
+
     /*
      * Perform any strategy unwinding or other calls necessary to capture
      * the "free return" this strategy has generated since the last time it's
@@ -292,6 +296,18 @@ contract StrategySushiswapPair is BaseStrategy {
         if (_earned / 2 == 0) return 0;
         uint256 _amount0 = quote(reward, token0, _earned / 2);
         uint256 _amount1 = quote(reward, token1, _earned / 2);
+        (uint112 _reserve0, uint112 _reserve1, ) = SushiswapPair(address(want)).getReserves();
+        uint256 _supply = IERC20(want).totalSupply();
+        return Math.min(
+            _amount0.mul(_supply).div(_reserve0),
+            _amount1.mul(_supply).div(_reserve1)
+        );
+    }
+
+    function eth_to_want(uint256 _amount) internal view returns (uint256) {
+        if (_amount / 2 == 0) return 0;
+        uint256 _amount0 = token0 == weth ? _amount / 2 : quote(weth, token0, _amount / 2);
+        uint256 _amount1 = token1 == weth ? _amount / 2 : quote(weth, token1, _amount / 2);
         (uint112 _reserve0, uint112 _reserve1, ) = SushiswapPair(address(want)).getReserves();
         uint256 _supply = IERC20(want).totalSupply();
         return Math.min(
