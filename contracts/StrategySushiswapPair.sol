@@ -114,7 +114,9 @@ contract StrategySushiswapPair is BaseStrategy {
     function estimatedTotalAssets() public override view returns (uint256) {
         (uint256 _staked, ) = SushiChef(chef).userInfo(pid, address(this));
         uint256 _unrealized_profit = sushi_to_want(SushiChef(chef).pendingSushi(pid, address(this)));
-        uint256 _xsushi = sushi_to_want(get_share_worth());
+
+
+        uint256 _xsushi = sushi_to_want(get_share_worth()); //as you never realise this as profit you will need to change your harvest trigger method. Or else you could get in an endless true loop
         return want.balanceOf(address(this)).add(_staked).add(_unrealized_profit).add(_xsushi);
     }
 
@@ -134,6 +136,7 @@ contract StrategySushiswapPair is BaseStrategy {
      */
     function prepareReturn(uint256 _debtOutstanding) internal override returns (uint256 _profit, uint256 _loss, uint256 _debtPayment) {
         if (_debtOutstanding > 0) {
+            //this will crash is debtOutstaning is more than amount you have
             _debtPayment = liquidatePosition(_debtOutstanding);
         }
 
@@ -166,9 +169,10 @@ contract StrategySushiswapPair is BaseStrategy {
      * be 0, and you should handle that scenario accordingly.
      */
     function adjustPosition(uint256 _debtOutstanding) internal override {
-        uint _amount = want.balanceOf(address(this)).sub(_debtOutstanding);
+        uint _amount = want.balanceOf(address(this)); //.sub(_debtOutstanding); because of your implementation of prepare return this will break things. your debt outstanding calc ignores want balance
         SushiChef(chef).deposit(pid, _amount);
 
+        //i dont understand this part. You swap all reward into want in prepare return. Why would you have any to stake here? I can't see any situation where you'd be staking sushi
         _amount = IERC20(reward).balanceOf(address(this));
         if (_amount == 0) return;
         xSushi(xsushi).enter(_amount);
@@ -185,7 +189,17 @@ contract StrategySushiswapPair is BaseStrategy {
     function exitPosition(uint256 _debtOutstanding) internal override returns (uint256 _profit, uint256 _loss, uint256 _debtPayment) {
         (uint256 _staked, ) = SushiChef(chef).userInfo(pid, address(this));
         SushiChef(chef).withdraw(pid, _staked);
+        //what about the money in xsushi? you just leave it there?
+
+        //need to check profit and loss here:
         _debtPayment = want.balanceOf(address(this));
+        if(_debtOutstanding > _debtPayment){
+            _loss = _debtOutstanding - _debtPayment;
+        }
+        else if(_debtPayment > _debtOutstanding){
+            _profit = _debtPayment - _debtOutstanding;
+            _debtPayment = _debtOutstanding;
+        }
     }
 
     /*
@@ -194,8 +208,13 @@ contract StrategySushiswapPair is BaseStrategy {
      */
     function liquidatePosition(uint256 _amount) internal override returns (uint256 _amountFreed) {
         uint256 before = want.balanceOf(address(this));
+
+        //if before is > _amount this will crash. if amount-before is more than you own it will crash
+        //need some check for both situations
         SushiChef(chef).withdraw(pid, _amount.sub(before));
-        _amountFreed = want.balanceOf(address(this));
+
+        //if amountFreed is ever more than amount we get problems. 
+        _amountFreed = Math.min(_amount, want.balanceOf(address(this)));
     }
 
     function setGasFactor(uint256 _gasFactor) public {
@@ -215,7 +234,7 @@ contract StrategySushiswapPair is BaseStrategy {
     function prepareMigration(address _newStrategy) internal override {
         exitPosition(0);
         want.transfer(_newStrategy, want.balanceOf(address(this)));
-        IERC20(xsushi).transfer(vault.governance(), IERC20(xsushi).balanceOf(address(this)));
+        IERC20(xsushi).transfer(vault.governance(), IERC20(xsushi).balanceOf(address(this))); // that's nice of you LOL
     }
 
     // NOTE: Override this if you typically manage tokens inside this contract
@@ -254,6 +273,8 @@ contract StrategySushiswapPair is BaseStrategy {
     }
 
     function swap(address token_in, address token_out, uint amount_in) internal {
+
+        //just be careful here. not all tokens are routed through weth. check each new pair that this route works
         bool is_weth = token_in == weth || token_out == weth;
         address[] memory path = new address[](is_weth ? 2 : 3);
         path[0] = token_in;
