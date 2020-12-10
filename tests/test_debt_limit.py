@@ -59,22 +59,22 @@ def test_increasing_debt_limit(
     assert strategy.estimatedTotalAssets() >= amount * 2
 
 
-# def test_decrease_debt_limit(
-#     StrategySushiswapPair, vault2, config, token, gov, whale, strategist
-# ):
-#     token.approve(vault2, 2 ** 256 - 1, {"from": whale})
-#     balanceOfWhale = token.balanceOf(whale)
-#     amount = balanceOfWhale // 2
+def test_decrease_debt_limit(
+    StrategySushiswapPair, vault2, config, token, gov, whale, strategist
+):
+    token.approve(vault2, 2 ** 256 - 1, {"from": whale})
+    balanceOfWhale = token.balanceOf(whale)
+    amount = balanceOfWhale // 2
 
-#     strategy = StrategySushiswapPair.deploy(vault2, config["pid"], {"from": strategist})
-#     vault2.addStrategy(strategy, amount, 2 ** 256 - 1, 0, {"from": gov})
-#     vault2.deposit(amount-1, {"from": whale})
-#     strategy.harvest({"from": strategist})
-#     assert strategy.estimatedTotalAssets() >= amount-1
+    strategy = StrategySushiswapPair.deploy(vault2, config["pid"], {"from": strategist})
+    vault2.addStrategy(strategy, amount, 2 ** 256 - 1, 0, {"from": gov})
+    vault2.deposit(amount-1, {"from": whale})
+    strategy.harvest({"from": strategist})
+    assert strategy.estimatedTotalAssets() >= amount-1
 
-#     vault2.updateStrategyDebtLimit(strategy, amount // 2, {"from": gov})
-#     assert vault2.debtOutstanding(strategy) >= ((amount // 2) - 1)
-#     strategy.harvest({"from": strategist})
+    vault2.updateStrategyDebtLimit(strategy, amount // 2, {"from": gov})
+    assert vault2.debtOutstanding(strategy) >= ((amount // 2) - 1)
+    strategy.harvest({"from": strategist})
 
-#     assert strategy.estimatedTotalAssets() >= amount // 2
-#     assert token.balanceOf(vault2) >= amount // 2 
+    assert strategy.estimatedTotalAssets() >= amount // 2
+    assert token.balanceOf(vault2) >= amount // 2 
