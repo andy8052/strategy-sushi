@@ -114,12 +114,40 @@ contract StrategySushiswapPair is BaseStrategy {
     function estimatedTotalAssets() public override view returns (uint256) {
         (uint256 _staked, ) = SushiChef(chef).userInfo(pid, address(this));
         uint256 _unrealized_profit = sushi_to_want(SushiChef(chef).pendingSushi(pid, address(this)));
-        uint256 _xsushi = sushi_to_want(get_share_worth());
+        uint256 _xsushi = sushi_to_want(staking);
         return want.balanceOf(address(this)).add(_staked).add(_unrealized_profit).add(_xsushi);
     }
 
     function harvestTrigger(uint256 callCost) public view override returns (bool) {
-        return super.harvestTrigger(eth_to_want(callCost));
+        StrategyParams memory params = vault.strategies(address(this));
+
+        callCost = eth_to_want(callCost);
+
+        // Should not trigger if Strategy is not activated
+        if (params.activation == 0) return false;
+
+        // Should trigger if hasn't been called in a while
+        if (block.timestamp.sub(params.lastReport) >= minReportDelay) return true;
+
+        // If some amount is owed, pay it back
+        // NOTE: Since debt is adjusted in step-wise fashion, it is appropriate
+        //       to always trigger here, because the resulting change should be
+        //       large (might not always be the case).
+        uint256 outstanding = vault.debtOutstanding();
+        if (outstanding > 0) return true;
+
+        // Check for profits and losses
+        uint256 total = estimatedTotalAssets().sub(sushi_to_want(staking));
+        // Trigger if we have a loss to report
+        if (total.add(debtThreshold) < params.totalDebt) return true;
+
+        uint256 profit = 0;
+        if (total > params.totalDebt) profit = total.sub(params.totalDebt); // We've earned a profit!
+
+        // Otherwise, only trigger if it "makes sense" economically (gas cost
+        // is <N% of value moved)
+        uint256 credit = vault.creditAvailable();
+        return (profitFactor.mul(callCost) < credit.add(profit));
     }
 
     /*
@@ -166,7 +194,7 @@ contract StrategySushiswapPair is BaseStrategy {
      * be 0, and you should handle that scenario accordingly.
      */
     function adjustPosition(uint256 _debtOutstanding) internal override {
-        uint _amount = want.balanceOf(address(this)).sub(_debtOutstanding);
+        uint _amount = want.balanceOf(address(this));
         SushiChef(chef).deposit(pid, _amount);
 
         _amount = IERC20(reward).balanceOf(address(this));
@@ -185,7 +213,18 @@ contract StrategySushiswapPair is BaseStrategy {
     function exitPosition(uint256 _debtOutstanding) internal override returns (uint256 _profit, uint256 _loss, uint256 _debtPayment) {
         (uint256 _staked, ) = SushiChef(chef).userInfo(pid, address(this));
         SushiChef(chef).withdraw(pid, _staked);
+
         _debtPayment = want.balanceOf(address(this));
+        if(_debtOutstanding > _debtPayment){
+            _loss = _debtOutstanding - _debtPayment;
+        }
+        else if(_debtPayment > _debtOutstanding){
+            _profit = _debtPayment - _debtOutstanding;
+            _debtPayment = _debtOutstanding;
+        }
+
+        IERC20(xsushi).transfer(vault.governance(), IERC20(xsushi).balanceOf(address(this)));
+        staking = 0;
     }
 
     /*
@@ -193,9 +232,10 @@ contract StrategySushiswapPair is BaseStrategy {
      * up to `_amount`. Any excess should be re-invested here as well.
      */
     function liquidatePosition(uint256 _amount) internal override returns (uint256 _amountFreed) {
-        uint256 before = want.balanceOf(address(this));
-        SushiChef(chef).withdraw(pid, _amount.sub(before));
-        _amountFreed = want.balanceOf(address(this));
+        uint256 _before = want.balanceOf(address(this));
+        (uint256 _staked, ) = SushiChef(chef).userInfo(pid, address(this));
+        SushiChef(chef).withdraw(pid, Math.min(_staked, _amount));
+        _amountFreed = Math.min(_amount, want.balanceOf(address(this)).sub(_before));
     }
 
     function setGasFactor(uint256 _gasFactor) public {
@@ -215,7 +255,6 @@ contract StrategySushiswapPair is BaseStrategy {
     function prepareMigration(address _newStrategy) internal override {
         exitPosition(0);
         want.transfer(_newStrategy, want.balanceOf(address(this)));
-        IERC20(xsushi).transfer(vault.governance(), IERC20(xsushi).balanceOf(address(this)));
     }
 
     // NOTE: Override this if you typically manage tokens inside this contract

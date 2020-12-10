@@ -51,7 +51,9 @@ def test_strategy_harvest(strategy, vault, token, whale, chain, chef, xsushi, su
 
     # We need to simulate sushi trading to earn some fees. We skip this by sending sushi to the sushi bar
     sushi.transfer(xsushi, 5000000000000000000000, {"from": sushiwhale})
+    assert strategy.harvestTrigger(100)
     strategy.harvest()
+    assert not strategy.harvestTrigger(100)
     assert weth.balanceOf(strategy) < 1000000000000
 
     print("Sushi Chef balance:", chef.userInfo(strategy.pid(), strategy))
